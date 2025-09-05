@@ -1,5 +1,23 @@
 class EntriesController < ApplicationController
   before_action :authenticate_user!
+  before_action :set_entry, only: [:show, :destroy, :edit, :update]
+
+  def index
+    @entries = current_user.entries.search(params[:name])
+    @main_entry = @entries.first
+
+    return unless params[:name].present?
+
+    if @entries.length == 1
+      render turbo_stream: [
+        turbo_stream.update('main-dashboard', partial: 'entries/main', locals: { entry: @entries.first }),
+        turbo_stream.update('entries-list', partial: 'entries/entry', locals: { entry: @entries.first })
+      ]
+    end
+  end
+
+  def show
+  end
 
   def new
     @entry = Entry.new
@@ -9,26 +27,49 @@ class EntriesController < ApplicationController
     @entry = current_user.entries.new(entry_params)
 
     if @entry.save
-      flash[:notice] = "Entry created!"
-      redirect_to root_path
+      flash.now[:notice] = "#{@entry.name} has been saved!"
+      respond_to do |format|
+        format.html { redirect_to root_path }
+        format.turbo_stream {}
+      end
     else
-      flash[:alert] = "Sorry, your entry was not created!"
       render :new, status: :unprocessable_entity
     end
   end
 
-  def index
-    @entries = current_user.entries
-    @main_entry = current_user.entries.first
+  def edit
+
   end
 
-  def show
-    @entry = current_user.entries.find(params[:id])
+  def update
+    if @entry.update(entry_params)
+      flash.now[:notice] = "#{@entry.name} has been updated!"
+      respond_to do |format|
+        format.html { redirect_to @entry }
+        format.turbo_stream {}
+      end
+    else
+      render :edit, status: :unprocessable_entity
+    end
+  end
+
+  def destroy
+    if @entry.destroy
+      flash.now[:notice] = "#{@entry.name} has been deleted!"
+      respond_to do |format|
+        format.html { redirect_to root_path }
+        format.turbo_stream {}
+      end
+    end
   end
 
   private
 
   def entry_params
     params.require(:entry).permit(:name, :url, :username, :password)
+  end
+
+  def set_entry
+    @entry = current_user.entries.find(params[:id])
   end
 end
